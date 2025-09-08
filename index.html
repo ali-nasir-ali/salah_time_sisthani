@@ -49,7 +49,16 @@
       <div id="prayer-times-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <!-- Dynamic prayer times -->
       </div>
-      <div class="mt-8 text-center">
+
+      <!-- Refresh Button -->
+      <div class="mt-6 text-center">
+        <button id="refresh-btn" class="px-4 py-2 bg-green-500 text-white font-semibold rounded-full shadow hover:bg-green-600 transition">
+          🔄 Refresh
+        </button>
+      </div>
+
+      <!-- External Link -->
+      <div class="mt-6 text-center">
         <a href="https://www.najaf.org/english/prayer/glasgow" target="_blank"
            class="inline-block px-4 py-2 bg-blue-500 text-white font-semibold rounded-full shadow hover:bg-blue-600 transition">
           View Full Timetable
@@ -65,12 +74,13 @@
       const content = document.getElementById('prayer-times-content');
       const prayerTimesList = document.getElementById('prayer-times-list');
       const currentDateEl = document.getElementById('current-date');
+      const refreshBtn = document.getElementById('refresh-btn');
 
       const today = new Date();
       const formats = {
-        gb: today.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        iso: today.toISOString().split('T')[0],
-        dash: today.toLocaleDateString('en-GB').replace(/\//g, '-')
+        gb: today.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }), // 08/09/2025
+        iso: today.toISOString().split('T')[0], // 2025-09-08
+        dash: today.toLocaleDateString('en-GB').replace(/\//g, '-') // 08-09-2025
       };
 
       const dateString = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -85,6 +95,10 @@
           const response = await fetch(dataUrl);
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const data = await response.json();
+
+          // Debugging log
+          console.log("Available dates in JSON:", data.map(d => d.Date).slice(0, 10));
+          console.log("Today formats we check:", formats);
 
           let todayData = data.find(item =>
             item.Date === formats.gb ||
@@ -115,7 +129,13 @@
         }
       }
 
+      // Run on page load
       fetchPrayerTimes();
+
+      // Refresh button
+      refreshBtn.addEventListener('click', () => {
+        fetchPrayerTimes();
+      });
     });
   </script>
 </body>
