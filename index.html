@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glasgow Prayer Times</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192x192.png"> <!-- For iOS PWA icon -->
+    <meta name="theme-color" content="#007bff"> <!-- Color for browser UI -->
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Make body take full viewport height */
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 25px;
+            max-width: 450px; /* Slightly wider for better readability */
+            margin: 20px auto;
+            width: calc(100% - 40px); /* Adjust for padding */
+            flex-grow: 1; /* Allow container to grow and fill space */
+            display: flex;
+            flex-direction: column;
+        }
+        h1 {
+            color: #007bff;
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 2em;
+            line-height: 1.2;
+        }
+        .prayer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .prayer-item:last-child {
+            border-bottom: none;
+        }
+        .prayer-name {
+            font-weight: 600;
+            font-size: 1.2em;
+            color: #555;
+        }
+        .prayer-time {
+            font-weight: 700;
+            font-size: 1.3em;
+            color: #007bff;
+        }
+        .last-updated {
+            text-align: center;
+            margin-top: auto; /* Push to bottom of container */
+            padding-top: 20px;
+            font-size: 0.9em;
+            color: #888;
+        }
+        .refresh-button {
+            display: block;
+            width: calc(100% - 40px); /* Match container width */
+            max-width: 450px;
+            margin: 20px auto;
+            padding: 15px 20px;
+            background-color: #28a745; /* Green for refresh */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            text-align: center;
+        }
+        .refresh-button:hover {
+            background-color: #218838;
+        }
+        .loading-message, .error-message {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.1em;
+            color: #666;
+        }
+        .error-message {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Glasgow Prayer Times</h1>
+        <div id="prayerTimesDisplay">
+            <p class="loading-message">Loading prayer times...</p>
+        </div>
+        <p class="last-updated" id="lastUpdated">Last Updated: Never</p>
+    </div>
+    <button class="refresh-button" id="refreshButton">Refresh Prayer Times</button>
+
+    <script>
+        // Register the Service Worker for PWA capabilities
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registered:', registration);
+                    })
+                    .catch(error => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        const prayerTimesDisplay = document.getElementById('prayerTimesDisplay');
+        const lastUpdatedElement = document.getElementById('lastUpdated');
+        const refreshButton = document.getElementById('refreshButton');
+
+        // URL of the original prayer times page
+        const ORIGINAL_PRAYER_URL = 'https://www.najaf.org/english/prayer/glasgow';
+        // A public CORS proxy. If this stops working, you might need to find another or host your own.
+        // Other options: 'https://api.allorigins.win/get?url=' or search for 'free CORS proxy'
+        const CORS_PROXY_URL = 'https://corsproxy.io/?'; 
+
+        async function fetchAndDisplayPrayerTimes() {
+            prayerTimesDisplay.innerHTML = '<p class="loading-message">Loading prayer times...</p>';
+            lastUpdatedElement.textContent = 'Last Updated: Fetching...';
+            refreshButton.disabled = true; // Disable button during fetch
+
+            try {
+                // Fetch the content via the CORS proxy
+                const response = await fetch(CORS_PROXY_URL + encodeURIComponent(ORIGINAL_PRAYER_URL));
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                // For corsproxy.io, the actual content is the response body
+                const html = await response.text();
+
+                // Parse the fetched HTML using DOMParser
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // --- CUSTOMIZE THIS PART BASED ON YOUR WEBSITE INSPECTION ---
+                // Inspect https://www.najaf.org/english/prayer/glasgow in your browser's developer tools
+                // Right-click on a prayer time and find a unique class or ID for the table.
+                // Based on a quick check, the table has class "table table-condensed"
+                const prayerTable = doc.querySelector('table.table-condensed');
+
+                if (!prayerTable) {
+                    throw new Error('Could not find the prayer times table on the page. HTML structure might have changed.');
+                }
+
+                let prayerDataHtml = '';
+                const rows = prayerTable.querySelectorAll('tr'); // Get all table rows
+
+                // Skip the header row if it exists (e.g., first row with <th>)
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const cols = row.querySelectorAll('td'); // Get table data cells
+                    
+                    if (cols.length === 2) { // Expecting two columns: Name and Time
+                        const prayerName = cols[0].textContent.trim();
+                        const prayerTime = cols[1].textContent.trim();
+                        prayerDataHtml += `
+                            <div class="prayer-item">
+                                <span class="prayer-name">${prayerName}</span>
+                                <span class="prayer-time">${prayerTime}</span>
+                            </div>
+                        `;
+                    }
+                }
+                // --- END CUSTOMIZATION ---
+
+                if (prayerDataHtml) {
+                    prayerTimesDisplay.innerHTML = prayerDataHtml;
+                    const now = new Date();
+                    lastUpdatedElement.textContent = `Last Updated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+                } else {
+                     prayerTimesDisplay.innerHTML = '<p class="error-message">No prayer times found. The website structure may have changed.</p>';
+                     lastUpdatedElement.textContent = 'Last Updated: Failed';
+                }
+                
+
+            } catch (error) {
+                console.error('Failed to fetch or parse prayer times:', error);
+                prayerTimesDisplay.innerHTML = `<p class="error-message">Error loading prayer times: ${error.message}<br>Please try again later.</p>`;
+                lastUpdatedElement.textContent = 'Last Updated: Error';
+            } finally {
+                refreshButton.disabled = false; // Re-enable button
+            }
+        }
+
+        // Load prayer times on initial page load
+        window.addEventListener('load', fetchAndDisplayPrayerTimes);
+
+        // Add event listener for the refresh button
+        refreshButton.addEventListener('click', fetchAndDisplayPrayerTimes);
+    </script>
+</body>
+</html>
