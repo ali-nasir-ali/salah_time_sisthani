@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Glasgow Prayer Times</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f3f4f6;
+    }
+    .card {
+      background-color: white;
+      padding: 1.5rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="p-4 flex items-center justify-center min-h-screen">
+  <div class="card max-w-lg w-full">
+    <!-- Title -->
+    <div class="flex flex-col items-center mb-6 text-center">
+      <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-2">Glasgow Prayer Times</h1>
+      <p id="current-date" class="text-base md:text-lg text-gray-500 font-medium"></p>
+    </div>
+
+    <!-- Loader -->
+    <div id="loader" class="flex justify-center items-center h-32">
+      <div class="loader"></div>
+    </div>
+
+    <!-- Prayer Times -->
+    <div id="prayer-times-content" class="hidden">
+      <div id="prayer-times-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Dynamic prayer times -->
+      </div>
+      <div class="mt-8 text-center">
+        <a href="https://www.najaf.org/english/prayer/glasgow" target="_blank"
+           class="inline-block px-4 py-2 bg-blue-500 text-white font-semibold rounded-full shadow hover:bg-blue-600 transition">
+          View Full Timetable
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const dataUrl = 'https://najaf-prayer-times.pages.dev/glasgow.json';
+      const loader = document.getElementById('loader');
+      const content = document.getElementById('prayer-times-content');
+      const prayerTimesList = document.getElementById('prayer-times-list');
+      const currentDateEl = document.getElementById('current-date');
+
+      const today = new Date();
+      const formats = {
+        gb: today.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        iso: today.toISOString().split('T')[0],
+        dash: today.toLocaleDateString('en-GB').replace(/\//g, '-')
+      };
+
+      const dateString = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      currentDateEl.textContent = dateString;
+
+      async function fetchPrayerTimes() {
+        loader.classList.remove('hidden');
+        content.classList.add('hidden');
+        prayerTimesList.innerHTML = '';
+
+        try {
+          const response = await fetch(dataUrl);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const data = await response.json();
+
+          let todayData = data.find(item =>
+            item.Date === formats.gb ||
+            item.Date === formats.iso ||
+            item.Date === formats.dash
+          );
+
+          if (!todayData) throw new Error("Could not find prayer times for the current day.");
+
+          const labels = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+          labels.forEach(label => {
+            const time = todayData[label];
+            const item = `
+              <div class="bg-gray-100 p-4 rounded-lg text-center flex flex-col justify-center items-center shadow">
+                <p class="text-sm font-semibold text-gray-500">${label}</p>
+                <p class="text-lg md:text-xl font-bold text-gray-700 mt-1">${time ?? '-'}</p>
+              </div>
+            `;
+            prayerTimesList.innerHTML += item;
+          });
+
+        } catch (error) {
+          prayerTimesList.innerHTML = `<p class="text-center text-red-500 font-medium">Failed to load prayer times.<br>Please check console log (F12).</p>`;
+          console.error("Error fetching prayer times:", error);
+        } finally {
+          loader.classList.add('hidden');
+          content.classList.remove('hidden');
+        }
+      }
+
+      fetchPrayerTimes();
+    });
+  </script>
+</body>
+</html>
